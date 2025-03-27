@@ -9,14 +9,12 @@ urlpatterns = [
     path(f'{settings.ADMIN_URL}/', admin.site.urls),
     
     # Include all URLs from main app
-    path('', include('main.urls')),  # This is important!
+    path('', include('main.urls')),  # Uncommented this line
     
     # Auth URLs
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),
-    
-    # New recipe management URLs
-    path('api/recipes/', include('recipes.urls')),  # Make sure this matches your frontend URL
+
     
     # Media files in development
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

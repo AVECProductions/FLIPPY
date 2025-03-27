@@ -60,7 +60,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'djoser',
     'simple_history',
-    'recipes',
 ]
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS").split(",")
@@ -100,6 +99,19 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'mssql',
+#         'NAME': 'FLIPPY',
+#         'HOST': 'OwensDevice\\MSSQLSERVER01',
+#         'PORT': '',
+#         'OPTIONS': {
+#             'driver': 'ODBC Driver 17 for SQL Server',
+#             'MARS_Connection': 'True',
+#         },
+#     }
+# }
+
 DATABASES = {
     'default': dj_database_url.parse(
         config('DATABASE_URL'),  # Fetch DATABASE_URL from .env
@@ -107,7 +119,6 @@ DATABASES = {
         ssl_require=True         # Optional: Use SSL for production
     )
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -174,7 +185,8 @@ EMAIL_HOST_PASSWORD = SENDGRID_API_KEY  # Use the API key as the password
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')  # Replace with your preferred sender email
 
 # For development only
-CORS_ALLOW_ALL_ORIGINS = False  # Disable this in production
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -196,10 +208,10 @@ CORS_ALLOW_HEADERS = [
     'x-webhook-signature',  # Add this for the webhook signature
 ]
 
-# For production, use this instead:
+# For production, specify allowed origins:
 # CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:8080",
-#     "http://your-production-domain.com",
+#     "http://localhost:5173",
+#     "https://your-production-domain.com",
 # ]
 
 # Add these settings
@@ -207,9 +219,10 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
+    # Comment out or modify this line to allow unauthenticated access by default
+    # 'DEFAULT_PERMISSION_CLASSES': (
+    #     'rest_framework.permissions.IsAuthenticated',
+    # ),
 }
 
 from datetime import timedelta
