@@ -4,8 +4,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import ActiveScanner, Keyword, Listing
-from .serializers import ActiveScannerSerializer, KeywordSerializer, ListingSerializer
+from .models import ActiveScanner, Keyword, Listing, Location, ScannerLocationMapping
+from .serializers import ActiveScannerSerializer, KeywordSerializer, ListingSerializer, LocationSerializer, ScannerLocationMappingSerializer
 from rest_framework.pagination import PageNumberPagination
 
 # Create your views here.
@@ -14,6 +14,11 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'limit'
     max_page_size = 100
+
+class LocationViewSet(viewsets.ModelViewSet):
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+    permission_classes = [AllowAny]  # Change this to IsAuthenticated in production
 
 class ActiveScannerViewSet(viewsets.ModelViewSet):
     queryset = ActiveScanner.objects.all()
@@ -39,7 +44,7 @@ class ListingViewSet(viewsets.ModelViewSet):
         # Apply filters based on query parameters
         query = self.request.query_params.get('query', None)
         category = self.request.query_params.get('category', None)
-        scanner_location = self.request.query_params.get('scanner_location', None)  # Renamed from 'location'
+        search_location = self.request.query_params.get('search_location', None)
         min_price = self.request.query_params.get('min_price', None)
         max_price = self.request.query_params.get('max_price', None)
         max_distance = self.request.query_params.get('max_distance', None)
@@ -51,13 +56,9 @@ class ListingViewSet(viewsets.ModelViewSet):
         if category:
             queryset = queryset.filter(search_title=category)
             
-        # Filter by scanner location (where the search originated from)
-        if scanner_location:
-            # Get all scanner IDs that match this location
-            scanner_ids = ActiveScanner.objects.filter(town=scanner_location).values_list('id', flat=True)
-            # Filter listings by matching query field to these scanner queries
-            scanner_queries = ActiveScanner.objects.filter(id__in=scanner_ids).values_list('query', flat=True)
-            queryset = queryset.filter(query__in=scanner_queries)
+        # Filter by search location (where the search originated from)
+        if search_location:
+            queryset = queryset.filter(search_location=search_location)
         
         # Apply distance filter if provided
         if max_distance and max_distance.isdigit():
@@ -109,22 +110,24 @@ class ListingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def filter_options(self, request):
         """Return available filter options"""
-        # Use distinct() to avoid duplicates
+        # Get unique queries from listings
         queries = list(Listing.objects.values_list('query', flat=True).distinct())
+        
+        # Get unique categories from listings
         categories = list(Listing.objects.values_list('search_title', flat=True).distinct())
         
-        # Get the scanner locations (towns) that have listings
-        scanner_locations = list(ActiveScanner.objects.values_list('town', flat=True).distinct())
+        # Get the search locations from listings
+        search_locations = list(Listing.objects.values_list('search_location', flat=True).distinct())
         
         # Filter out None and empty values and ensure unique values
         queries = sorted(list(set(q for q in queries if q)))
         categories = sorted(list(set(c for c in categories if c)))
-        scanner_locations = sorted(list(set(loc for loc in scanner_locations if loc)))
+        search_locations = sorted(list(set(loc for loc in search_locations if loc)))
         
         return Response({
             'queries': queries,
             'categories': categories,
-            'scanner_locations': scanner_locations
+            'search_locations': search_locations  # Use search_locations instead of scanner_locations
         })
 
 class KeywordViewSet(viewsets.ModelViewSet):
@@ -164,4 +167,19 @@ class KeywordViewSet(viewsets.ModelViewSet):
         # Return the updated list
         updated_keywords = Keyword.objects.filter(filterID=scanner_id)
         serializer = self.get_serializer(updated_keywords, many=True)
+        return Response(serializer.data)
+
+class ScannerLocationMappingViewSet(viewsets.ModelViewSet):
+    queryset = ScannerLocationMapping.objects.all()
+    serializer_class = ScannerLocationMappingSerializer
+    permission_classes = [AllowAny]  # Change to IsAuthenticated in production
+    
+    @action(detail=False, methods=['get'])
+    def by_scanner(self, request):
+        scanner_id = request.query_params.get('scanner_id')
+        if not scanner_id:
+            return Response({"error": "Scanner ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        mappings = ScannerLocationMapping.objects.filter(scanner_id=scanner_id)
+        serializer = self.get_serializer(mappings, many=True)
         return Response(serializer.data)
