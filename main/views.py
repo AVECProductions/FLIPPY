@@ -23,14 +23,68 @@ class LocationViewSet(viewsets.ModelViewSet):
 class ActiveScannerViewSet(viewsets.ModelViewSet):
     queryset = ActiveScanner.objects.all()
     serializer_class = ActiveScannerSerializer
-    # Allow any access for development
     permission_classes = [AllowAny]  # Change this to IsAuthenticated in production
     
-    @action(detail=False, methods=['get'])
-    def locations(self, request):
-        """Return unique town values from active scanners"""
-        locations = ActiveScanner.objects.values_list('town', flat=True).distinct()
-        return Response(list(locations))
+    def create(self, request, *args, **kwargs):
+        # Extract location_ids from request data
+        location_ids = request.data.pop('location_ids', [])
+        
+        # Create the scanner
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        scanner = serializer.save()
+        
+        # Create location mappings
+        for location_id in location_ids:
+            try:
+                location = Location.objects.get(id=location_id)
+                ScannerLocationMapping.objects.create(
+                    scanner=scanner,
+                    location=location,
+                    is_active=True
+                )
+            except Location.DoesNotExist:
+                pass
+        
+        # Return the created scanner with location data
+        return Response(
+            ActiveScannerSerializer(scanner).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    def update(self, request, *args, **kwargs):
+        # Extract location_ids from request data
+        location_ids = request.data.pop('location_ids', None)
+        
+        # Update the scanner
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Update location mappings if provided
+        if location_ids is not None:
+            # Deactivate all existing mappings
+            ScannerLocationMapping.objects.filter(scanner=instance).update(is_active=False)
+            
+            # Create or activate mappings for the provided location_ids
+            for location_id in location_ids:
+                try:
+                    location = Location.objects.get(id=location_id)
+                    mapping, created = ScannerLocationMapping.objects.get_or_create(
+                        scanner=instance,
+                        location=location,
+                        defaults={'is_active': True}
+                    )
+                    if not created:
+                        mapping.is_active = True
+                        mapping.save()
+                except Location.DoesNotExist:
+                    pass
+        
+        # Return the updated scanner with location data
+        return Response(ActiveScannerSerializer(instance).data)
 
 class ListingViewSet(viewsets.ModelViewSet):
     queryset = Listing.objects.all().order_by('-created_at')
